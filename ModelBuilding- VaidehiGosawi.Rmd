@@ -1,0 +1,216 @@
+---
+title: "Model Building"
+author: "Vaidehi"
+date: "2/1/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+## R Markdown
+
+```{r EDA}
+#Loading required libraries
+library(dplyr)
+library(lubridate)
+library(rpart)
+library(tidyverse)
+library(randomForest)
+library(rpart.plot)
+library(ROCR)
+library(caret)
+
+#Load Data
+data <- read.csv("intern_data.csv")
+View(data)
+
+test <- read.csv("intern_test.csv")
+View(test)
+
+testgbm <- read.csv("intern_test.csv")
+View(testgbm)
+
+# Exploration
+nrow(data)
+summary(data)
+
+# Convert variables to factor variables to ensure categorical variables 
+# are treated differently in comparison to continuous variables
+data$c <- as.factor(data$c)
+data$h <- as.factor(data$h)
+
+test$c <- as.factor(test$c)
+test$h <- as.factor(test$h)
+
+# Check if variables have been successfully converted to factor variables
+summary(data)
+is.factor(data$c)
+
+# Remove observations with missing values:
+data <- data[complete.cases(data),]
+```
+
+RANDOM FOREST
+```{r RF}
+# Use training data to build a random forest classifier with 10 trees
+set.seed(32)
+rf <-randomForest(y~., data=data, ntree=10, na.action=na.exclude, importance=T,
+                  proximity=T) 
+print(rf) # print the random forest
+
+# Use training data to build a random forest classifier with 20 trees
+set.seed(32)
+rf <-randomForest(y~., data=data, ntree=20, na.action=na.exclude, importance=T,
+                  proximity=T) 
+print(rf) # print the random forest
+
+# Use training data to build a random forest classifier with 30 trees
+set.seed(32)
+rf <-randomForest(y~., data=data, ntree=80, na.action=na.exclude, importance=T,
+                  proximity=T) 
+print(rf) # print the random forest
+
+# Use training data to build a random forest classifier with 40 trees
+set.seed(32)
+rf <-randomForest(y~., data=data, ntree=40, na.action=na.exclude, importance=T,
+                  proximity=T) 
+print(rf) # print the random forest
+
+# Use training data to build a random forest classifier with 50 trees
+set.seed(32)
+rf <-randomForest(y~., data=data, ntree=50, na.action=na.exclude, importance=T,
+                  proximity=T) 
+print(rf) # print the random forest
+
+# Find the best value of mtry with 30 trees (30 trees because it gave lowest OOB error and highest variance explained)
+mtry <- tuneRF(data[-10], data$y, ntreeTry=30,  stepFactor=1.5, 
+               improve=0.01, trace=TRUE, 
+               plot=TRUE, na.action=na.exclude)
+
+#Find the best mtry and print it
+best.m <- mtry[mtry[, 2] == min(mtry[, 2]), 1]
+print(mtry)
+print(best.m)
+
+#Random Forest
+model.rf <- randomForest(y~., data=data, mtry=best.m, importance=TRUE, ntree=40)
+model.rf
+
+importance(model.rf) %>% View
+print(model.rf)
+
+
+#Prediction using Random Forest
+pred = predict(model.rf, test)
+pred
+
+df <- data.frame(pred)
+df
+
+ynew=pred
+final <- cbind(test, ynew)
+View(final)
+
+
+#Exporting to csv
+write.csv(final, file = 'intern_predicted_RF.csv')
+```
+
+GBM Model
+```{r GBM}
+library(gbm)
+
+#Parameter tuning for gbm
+#With number of trees as 100
+gbmintern= gbm(y ~ ., data=data,distribution = "gaussian",
+            n.trees = 100,
+            interaction.depth = 1,
+            shrinkage = 0.001,
+            cv.folds = 5,
+            n.cores = NULL,
+            verbose = FALSE)
+gbmintern
+sqrt(min(gbmintern$cv.error))
+gbm.perf(gbmintern, method = "cv")
+
+#With number of trees as 1000
+gbmintern= gbm(y ~ ., data=data,distribution = "gaussian",
+               n.trees = 1000,
+               interaction.depth = 1,
+               shrinkage = 0.001,
+               cv.folds = 5,
+               n.cores = NULL,
+               verbose = FALSE)
+gbmintern
+sqrt(min(gbmintern$cv.error))
+gbm.perf(gbmintern, method = "cv")
+
+
+#With number of trees as 4000
+gbmintern= gbm(y ~ ., data=data,distribution = "gaussian",
+               n.trees = 4000,
+               interaction.depth = 1,
+               shrinkage = 0.001,
+               cv.folds = 5,
+               n.cores = NULL,
+               verbose = FALSE)
+gbmintern
+sqrt(min(gbmintern$cv.error))
+gbm.perf(gbmintern, method = "cv")
+
+#Choosing best shrinkage value - Increasing the learning rate to 0.005
+gbmintern= gbm(y ~ ., data=data,distribution = "gaussian",
+               n.trees = 4000,
+               interaction.depth = 1,
+               shrinkage = 0.005,
+               cv.folds = 5,
+               n.cores = NULL,
+               verbose = FALSE)
+gbmintern
+sqrt(min(gbmintern$cv.error))
+gbm.perf(gbmintern, method = "cv")
+
+#Choosing best shrinkage value - Increasing the learning rate to 0.009
+gbmintern= gbm(y ~ ., data=data,distribution = "gaussian",
+               n.trees = 4000,
+               interaction.depth = 1,
+               shrinkage = 0.009,
+               cv.folds = 5,
+               n.cores = NULL,
+               verbose = FALSE)
+gbmintern
+sqrt(min(gbmintern$cv.error))
+gbm.perf(gbmintern, method = "cv")
+
+
+#Choosing best shrinkage value - Increasing the learning rate to 0.01
+gbmintern= gbm(y ~ ., data=data,distribution = "gaussian",
+               n.trees = 4000,
+               interaction.depth = 1,
+               shrinkage = 0.01,
+               cv.folds = 5,
+               n.cores = NULL,
+               verbose = FALSE)
+gbmintern
+sqrt(min(gbmintern$cv.error))
+gbm.perf(gbmintern, method = "cv")
+
+#Summary
+summary(gbmintern)
+
+#Prediction
+predgbm <- predict.gbm(object=gbmintern,
+            newdata = testgbm,
+            n.trees = 4000)
+predgbm
+
+dfgbm <- data.frame(predgbm)
+dfgbm
+
+ygbm=predgbm
+finalgbm <- cbind(testgbm, ygbm)
+View(finalgbm)
+
+#Exporting to csv
+write.csv(finalgbm, file = 'intern_predicted_GBM.csv')
+```
